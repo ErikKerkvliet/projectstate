@@ -7,6 +7,8 @@ from typing import Any
 from ..db import Database
 from ..meter import TOOLS
 
+UNKNOWN_TOOLS = "(unknown tool names)"
+
 
 def _days(n: int) -> list[str]:
     today = datetime.now(timezone.utc).date()
@@ -46,11 +48,20 @@ class Metrics:
         return [{"week": r["w"], "calls": r["n"], "revenue": r["rev"]} for r in rows]
 
     def per_tool(self, days: int = 7) -> list[dict[str, Any]]:
+        """Per-tool stats. Calls for names this server does not serve (scanners invent tool names) are
+        collapsed into one `UNKNOWN_TOOLS` row so they cannot distort the tool mix."""
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         rows = self.db.q("SELECT tool, duration_ms, ok, charged, deduped FROM calls WHERE ts >= ?", (since,))
-        acc: dict[str, dict[str, Any]] = {t: {"tool": t, "calls": 0, "errors": 0, "revenue": 0, "durs": [], "deduped": 0} for t in TOOLS}
+
+        def blank(name: str) -> dict[str, Any]:
+            return {"tool": name, "calls": 0, "errors": 0, "revenue": 0, "durs": [], "deduped": 0, "names": set()}
+
+        acc: dict[str, dict[str, Any]] = {t: blank(t) for t in TOOLS}
         for r in rows:
-            a = acc.setdefault(r["tool"], {"tool": r["tool"], "calls": 0, "errors": 0, "revenue": 0, "durs": [], "deduped": 0})
+            name = r["tool"] if r["tool"] in TOOLS else UNKNOWN_TOOLS
+            a = acc.setdefault(name, blank(name))
+            if name == UNKNOWN_TOOLS:
+                a["names"].add(r["tool"])
             a["calls"] += 1
             a["errors"] += 0 if r["ok"] else 1
             a["revenue"] += r["charged"] or 0
@@ -65,8 +76,10 @@ class Metrics:
                 "tool": a["tool"], "calls": a["calls"], "share": a["calls"] / total, "errors": a["errors"],
                 "error_rate": (a["errors"] / a["calls"]) if a["calls"] else 0.0, "revenue": a["revenue"], "deduped": a["deduped"],
                 "p50": _pct(d, 0.5), "p95": _pct(d, 0.95), "n_timed": len(d),
+                "is_unknown": a["tool"] == UNKNOWN_TOOLS, "n_names": len(a["names"]),
+                "names": sorted(a["names"])[:20],
             })
-        out.sort(key=lambda x: -x["calls"])
+        out.sort(key=lambda x: (x["is_unknown"], -x["calls"]))
         return out
 
     def recent_errors(self, limit: int = 50) -> list[dict[str, Any]]:
