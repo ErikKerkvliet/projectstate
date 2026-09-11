@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS x402_payments (
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL, payer TEXT, network TEXT, amount INTEGER NOT NULL, tx TEXT,
   nonce TEXT UNIQUE, session_id TEXT, tool TEXT, status TEXT NOT NULL, raw TEXT);
 CREATE TABLE IF NOT EXISTS x402_credit_tokens (
-  token_hash TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT);
+  token_hash TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, created_at TEXT NOT NULL, last_used_at TEXT,
+  kind TEXT NOT NULL DEFAULT 'credit', label TEXT, revoked_at TEXT);
 CREATE TABLE IF NOT EXISTS alarms (
   id INTEGER PRIMARY KEY, ts TEXT NOT NULL, tenant_id TEXT, kind TEXT NOT NULL, message TEXT NOT NULL,
   acknowledged INTEGER NOT NULL DEFAULT 0);
@@ -99,6 +100,14 @@ class Database:
         cur.execute("PRAGMA busy_timeout=10000")
         cur.executescript(SCHEMA)
         self._migrate(cur)
+        self._migrate_tokens(cur)
+
+    def _migrate_tokens(self, cur: sqlite3.Cursor) -> None:
+        """Add the operator-key columns to an x402_credit_tokens table created before they existed."""
+        have = {r[1] for r in cur.execute("PRAGMA table_info(x402_credit_tokens)").fetchall()}
+        for col, ddl in (("kind", "kind TEXT NOT NULL DEFAULT 'credit'"), ("label", "label TEXT"), ("revoked_at", "revoked_at TEXT")):
+            if col not in have:
+                cur.execute(f"ALTER TABLE x402_credit_tokens ADD COLUMN {ddl}")
 
     # -- migrations ---------------------------------------------------------------------------
     def _migrate(self, cur: sqlite3.Cursor) -> None:

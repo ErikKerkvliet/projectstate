@@ -1,0 +1,20 @@
+{% extends "admin_base.html" %}{% block admin %}
+{% if new_key %}<div class="card" style="border-color:#f59e0b"><h2>Your new operator key</h2><div class="key">{{ new_key }}</div>
+<p class="muted">Copy it now, it is not shown again. Give it to an agent as <code>Authorization: Bearer …</code>:</p>
+<pre>claude mcp add --transport http projectstate {{ base_url }}/mcp --header "Authorization: Bearer {{ new_key }}"</pre>
+<pre>{"mcpServers": {"projectstate": {"url": "{{ base_url }}/mcp",
+   "headers": {"Authorization": "Bearer {{ new_key }}"}}}}</pre></div>{% endif %}
+<div class="card"><h2>Operator keys</h2>
+<p class="muted">A key lets an agent use projectstate <b>without paying and without a wallet</b>. Calls are still metered and still bound by the caps ({{ caps[0] }} per day, {{ caps[1] }} per minute by default), they are simply never charged. Each key belongs to a tenant, which is its own isolated project space: reuse a tenant to let several agents share one memory, or leave it blank for a fresh one. Anyone holding the string can use the service for free, so treat it like a password.</p>
+<table><tr><th>Label</th><th>Tenant (project space)</th><th class="num">Projects</th><th class="num">Calls</th><th>Created</th><th>Last used</th><th></th></tr>
+{% for k in keys %}<tr{% if k.revoked_at %} class="muted"{% endif %}>
+<td>{{ k.label or '-' }}</td><td><a href="/admin/users/{{ k.tenant_id }}"><code>{{ k.tenant_id }}</code></a></td>
+<td class="num">{{ k.projects }}</td><td class="num">{{ k.calls }}</td>
+<td class="muted">{{ k.created_at[:16] }}</td><td class="muted">{{ (k.last_used_at or '-')[:16] }}</td>
+<td>{% if k.revoked_at %}<span class="bad">revoked</span>{% else %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="hash" value="{{ k.token_hash }}"><button class="sec small">revoke</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="7" class="muted">No keys yet.</td></tr>{% endfor %}</table>
+<form method="post" style="margin-top:14px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="create">
+<label>Label (what is this key for)</label><input type="text" name="label" placeholder="my laptop agent" style="max-width:280px">
+<label>Share an existing project space (optional tenant id)</label><input type="text" name="tenant" placeholder="leave blank for a new one" style="max-width:280px">
+<p><button>Create key</button></p></form></div>
+{% endblock %}

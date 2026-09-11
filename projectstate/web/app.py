@@ -201,6 +201,32 @@ class Web:
         return self.render(request, "admin_user.html", t=t, ledger=self.metrics.ledger(tid, 100), calls=calls, projects=self.svc.store.list_projects(tid),
                            ledger_ok=self.meter.ledger_matches_wallet(tid), tokens=tokens, payments=payments)
 
+    async def admin_keys(self, request: Request):
+        self.require_admin(request)
+        new_key = None
+        if request.method == "POST":
+            form = await self.check_csrf(request)
+            action = form.get("action")
+            if action == "create":
+                label = (form.get("label") or "operator key").strip()[:80]
+                tenant = (form.get("tenant") or "").strip()
+                if tenant and not self.db.one("SELECT 1 FROM tenants WHERE id=?", (tenant,)):
+                    return self.redirect(request, "/admin/keys", f"Unknown tenant {tenant}.", "err")
+                tenant = tenant or self.svc.x402.new_operator_tenant(label)
+                new_key = self.svc.x402.issue_credit_token(tenant, kind="comp", label=label)
+                self.session(request)["new_key"] = new_key
+                return self.redirect(request, "/admin/keys", "Key created. Copy it now; it is shown once.")
+            if action == "revoke":
+                self.svc.x402.revoke_token(form.get("hash", ""))
+                return self.redirect(request, "/admin/keys", "Key revoked.")
+        rows = [dict(r) for r in self.db.q(
+            "SELECT t.token_hash, t.tenant_id, t.label, t.created_at, t.last_used_at, t.revoked_at,"
+            " (SELECT COUNT(*) FROM calls c WHERE c.tenant_id=t.tenant_id) AS calls,"
+            " (SELECT COUNT(*) FROM projects p WHERE p.tenant_id=t.tenant_id) AS projects"
+            " FROM x402_credit_tokens t WHERE t.kind='comp' ORDER BY t.rowid DESC")]
+        return self.render(request, "admin_keys.html", keys=rows, new_key=self.session(request).pop("new_key", None),
+                           caps=(self.meter.setting_int("cap.daily_calls", 2000), self.meter.setting_int("cap.per_minute", 60)))
+
     async def admin_errors(self, request: Request):
         self.require_admin(request)
         return self.render(request, "admin_errors.html", errors=self.metrics.recent_errors(200), kinds=self.metrics.error_kinds(7))
@@ -276,6 +302,7 @@ def build_web_routes(svc: Any) -> list[Route]:
         r("/admin/login", w.admin_login, ("GET", "POST")), r("/admin/logout", w.admin_logout, ("POST",)),
         r("/admin", w.admin_overview), r("/admin/tools", w.admin_tools, ("GET", "POST")),
         r("/admin/users", w.admin_users), r("/admin/users/{tid}", w.admin_user, ("GET", "POST")),
+        r("/admin/keys", w.admin_keys, ("GET", "POST")),
         r("/admin/errors", w.admin_errors), r("/admin/ledger", w.admin_ledger), r("/admin/search", w.admin_search),
         r("/admin/settings", w.admin_settings, ("GET", "POST")), r("/admin/alarms/{aid:int}/ack", w.admin_alarm_ack, ("POST",)),
         r("/admin/system", w.admin_system), r("/admin/api/summary", w.admin_json),

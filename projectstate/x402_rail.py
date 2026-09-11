@@ -156,20 +156,46 @@ class X402Rail:
         """Unbind every MCP session currently pointing at this tenant (balance is untouched)."""
         self._sessions = {k: v for k, v in self._sessions.items() if v[0] != tenant_id}
 
-    def issue_credit_token(self, tenant_id: str) -> str:
-        """Opaque bearer that lets a sessionless client keep drawing from its wallet credit."""
-        tok = "xc_" + secrets.token_urlsafe(24)
-        self.db.exec("INSERT INTO x402_credit_tokens(token_hash,tenant_id,created_at) VALUES(?,?,?)", (hashlib.sha256(tok.encode()).hexdigest(), tenant_id, now_iso()))
+    def issue_credit_token(self, tenant_id: str, kind: str = "credit", label: str | None = None) -> str:
+        """Opaque bearer for a tenant.
+
+        kind='credit': lets a sessionless client keep drawing from the wallet credit it paid for.
+        kind='comp':   operator key — calls are metered and capped like any other, but never charged, so
+                       the holder needs no wallet and no payment. Anyone holding the string can use the
+                       service for free within that tenant's caps, so treat it like a password.
+        """
+        if kind not in ("credit", "comp"):
+            raise ValueError("kind must be 'credit' or 'comp'")
+        tok = ("ps_" if kind == "comp" else "xc_") + secrets.token_urlsafe(24)
+        self.db.exec(
+            "INSERT INTO x402_credit_tokens(token_hash,tenant_id,created_at,kind,label) VALUES(?,?,?,?,?)",
+            (hashlib.sha256(tok.encode()).hexdigest(), tenant_id, now_iso(), kind, (label or "")[:80] or None),
+        )
         return tok
 
-    def credit_token_tenant(self, token: str | None) -> str | None:
-        if not token or not token.startswith("xc_"):
+    def resolve_token(self, token: str | None) -> tuple[str, str] | None:
+        """(tenant_id, kind) for a live token, or None. Unknown and revoked tokens resolve to None."""
+        if not token or not (token.startswith("xc_") or token.startswith("ps_")):
             return None
-        r = self.db.one("SELECT tenant_id FROM x402_credit_tokens WHERE token_hash=?", (hashlib.sha256(token.encode()).hexdigest(),))
+        h = hashlib.sha256(token.encode()).hexdigest()
+        r = self.db.one("SELECT tenant_id, kind FROM x402_credit_tokens WHERE token_hash=? AND revoked_at IS NULL", (h,))
         if r is None:
             return None
-        self.db.exec("UPDATE x402_credit_tokens SET last_used_at=? WHERE token_hash=?", (now_iso(), hashlib.sha256(token.encode()).hexdigest()))
-        return r["tenant_id"]
+        self.db.exec("UPDATE x402_credit_tokens SET last_used_at=? WHERE token_hash=?", (now_iso(), h))
+        return r["tenant_id"], (r["kind"] or "credit")
+
+    def credit_token_tenant(self, token: str | None) -> str | None:
+        hit = self.resolve_token(token)
+        return hit[0] if hit else None
+
+    def new_operator_tenant(self, label: str) -> str:
+        """A tenant with its own isolated project space, reachable only through operator keys."""
+        tenant_id = "key_" + secrets.token_hex(6)
+        self.db.ensure_tenant(tenant_id, "operator", (label or "operator key")[:80])
+        return tenant_id
+
+    def revoke_token(self, token_hash: str) -> None:
+        self.db.exec("UPDATE x402_credit_tokens SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL", (now_iso(), token_hash))
 
     # -- payment required ---------------------------------------------------------------------
     async def payment_required(self, tool: str, error: str, sessionless: bool = False) -> dict[str, Any]:

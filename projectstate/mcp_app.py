@@ -101,7 +101,9 @@ def make_metering_middleware(svc: Services):
         # -- who is calling? ------------------------------------------------------------------
         auth = headers.get("authorization", "")
         credit_tok = meta.get(CREDIT_META_KEY) or (auth[7:].strip() if auth.lower().startswith("bearer ") else None)
-        bound_tenant = x402.session_tenant(session_id) or x402.credit_token_tenant(credit_tok)
+        token_hit = x402.resolve_token(credit_tok)
+        comp = bool(token_hit and token_hit[1] == "comp")
+        bound_tenant = (token_hit[0] if token_hit else None) or x402.session_tenant(session_id)
         sessionless = not session_id and bound_tenant is None
         payment = meta.get(PAYMENT_META_KEY)
         if payment is not None:
@@ -117,7 +119,7 @@ def make_metering_middleware(svc: Services):
             meter.log_call(None, RAIL, tool, 0, False, "payment_required", "no payment / unbound caller", 0, None, session_id)
             return _payment_required_result(await x402.payment_required(tool, "Payment required to call this tool.", sessionless))
         svc.db.touch_tenant(tenant_id)
-        caller = Caller(tenant_id=tenant_id, rail=RAIL)
+        caller = Caller(tenant_id=tenant_id, rail="comp" if comp else RAIL)
 
         # -- idempotency / dedup --------------------------------------------------------------
         explicit_key = args.get("idempotency_key") or meta.get("idempotencyKey") or meta.get("idempotency_key")
@@ -135,7 +137,7 @@ def make_metering_middleware(svc: Services):
             except Exception:
                 hit = None
         if hit is not None:
-            meter.log_call(tenant_id, RAIL, tool, (time.perf_counter() - t0) * 1000, True, None, None, 0, key, session_id, deduped=True)
+            meter.log_call(tenant_id, "comp" if comp else RAIL, tool, (time.perf_counter() - t0) * 1000, True, None, None, 0, key, session_id, deduped=True)
             replay = CallToolResult.model_validate(hit[1])
             replay.meta = {**(replay.meta or {}), "projectstate/deduplicated": True}
             if settle:
@@ -145,7 +147,7 @@ def make_metering_middleware(svc: Services):
         fut: asyncio.Future = asyncio.get_running_loop().create_future()
         inflight[(tenant_id, key)] = fut
         try:
-            res = await _run_metered(ctx, call_next, tenant_id, caller, tool, key, session_id, t0, settle)
+            res = await _run_metered(ctx, call_next, tenant_id, caller, tool, key, session_id, t0, settle, comp)
             if new_credit:
                 res.meta = {**(res.meta or {}), CREDIT_META_KEY: new_credit}
             if not fut.done():
@@ -157,14 +159,16 @@ def make_metering_middleware(svc: Services):
             if not fut.done():
                 fut.set_result(None)
 
-    async def _run_metered(ctx: Any, call_next: Any, tenant_id: str, caller: Caller, tool: str, key: str, session_id: str | None, t0: float, settle: dict[str, Any] | None) -> CallToolResult:
+    async def _run_metered(ctx: Any, call_next: Any, tenant_id: str, caller: Caller, tool: str, key: str, session_id: str | None, t0: float, settle: dict[str, Any] | None, comp: bool = False) -> CallToolResult:
         # -- caps and balance ------------------------------------------------------------------
-        price = meter.price(tool)
+        # An operator key is metered and capped like any caller, it just never pays.
+        rail = caller.rail
+        price = 0 if comp else meter.price(tool)
         try:
             meter.check_caps(tenant_id)
             meter.check_balance(tenant_id, price)
         except MeterError as exc:
-            meter.log_call(tenant_id, RAIL, tool, (time.perf_counter() - t0) * 1000, False, exc.kind, exc.message, 0, key, session_id)
+            meter.log_call(tenant_id, rail, tool, (time.perf_counter() - t0) * 1000, False, exc.kind, exc.message, 0, key, session_id)
             if exc.kind == "insufficient_balance":
                 return _payment_required_result(await x402.payment_required(tool, exc.message))
             return _error_result(exc.message)
@@ -175,7 +179,7 @@ def make_metering_middleware(svc: Services):
             result = await call_next(ctx)
         except Exception as exc:
             kind = "protocol_error" if type(exc).__name__ == "MCPError" else "exception"
-            meter.log_call(tenant_id, RAIL, tool, (time.perf_counter() - t0) * 1000, False, kind, f"{type(exc).__name__}: {exc}", 0, key, session_id)
+            meter.log_call(tenant_id, rail, tool, (time.perf_counter() - t0) * 1000, False, kind, f"{type(exc).__name__}: {exc}", 0, key, session_id)
             raise
         finally:
             current_caller.reset(token)
@@ -191,14 +195,18 @@ def make_metering_middleware(svc: Services):
         if not ok:
             err_msg = " ".join(getattr(c, "text", "") for c in res.content)[:500]
         charged = price if ok else 0
-        call_id = meter.log_call(tenant_id, RAIL, tool, duration, ok, None if ok else "tool_error", err_msg, charged, key, session_id)
+        call_id = meter.log_call(tenant_id, rail, tool, duration, ok, None if ok else "tool_error", err_msg, charged, key, session_id)
         if ok:
             if charged:
                 meter.charge(tenant_id, RAIL, tool, call_id, charged, key)
             meter.dedup_put(tenant_id, key, call_id, res.model_dump(by_alias=True, exclude_none=True))
             if tool in WRITE_TOOLS:
                 svc.db.exec("DELETE FROM dedup WHERE tenant_id=? AND request_key LIKE 'h:%' AND request_key<>?", (tenant_id, key))
-            res.meta = {**(res.meta or {}), "projectstate/chargedUsd": micro_to_usd(charged), "projectstate/balanceUsd": micro_to_usd(meter.balance(tenant_id))}
+            res.meta = {**(res.meta or {}), "projectstate/chargedUsd": micro_to_usd(charged)}
+            if comp:
+                res.meta["projectstate/operatorKey"] = True
+            else:
+                res.meta["projectstate/balanceUsd"] = micro_to_usd(meter.balance(tenant_id))
         if settle:
             res.meta = {**(res.meta or {}), PAYMENT_RESPONSE_META_KEY: settle}
         meter.check_volume_alarm(tenant_id)

@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block title %}Admin — projectstate{% endblock %}{% block body %}
 <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><b>Admin</b>
-<a href="/admin">Overview</a><a href="/admin/tools">Tools &amp; prices</a><a href="/admin/users">Users</a><a href="/admin/errors">Errors</a><a href="/admin/ledger">Ledger</a><a href="/admin/search">Search quality</a><a href="/admin/settings">Settings</a><a href="/admin/system">System</a>
+<a href="/admin">Overview</a><a href="/admin/tools">Tools &amp; prices</a><a href="/admin/users">Wallets</a><a href="/admin/keys">Keys</a><a href="/admin/errors">Errors</a><a href="/admin/ledger">Ledger</a><a href="/admin/search">Search quality</a><a href="/admin/settings">Settings</a><a href="/admin/system">System</a>
 <span style="flex:1"></span><form method="post" action="/admin/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="sec small">Admin log out</button></form></div>
 {% block admin %}{% endblock %}{% endblock %}
