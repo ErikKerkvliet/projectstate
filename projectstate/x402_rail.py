@@ -215,13 +215,30 @@ class X402Rail:
         "update": {"project": "my-app", "id": 42, "status": "done"},
     }
 
+    # Short, human-readable purpose per tool for discovery indexes (the tool docstrings are written for
+    # an LLM and read badly when truncated).
+    SUMMARIES = {
+        "project_open": "Open or create a project and get a brief of its status, open tasks, decisions and failed attempts.",
+        "project_status": "Read or set a project's one-line status, with its open tasks and last change.",
+        "remember": "Store one project fact: a decision, an attempt (worked/failed), a task or a note.",
+        "recall": "Ranked keyword search over a project's memory, trimmed to a character budget.",
+        "update": "Change an entry: set its status, append an outcome, edit it or delete it.",
+    }
+
+    def resource_url(self, tool: str) -> str:
+        """Public, reachable URL for this tool.
+
+        Discovery indexes (the x402 Bazaar) only catalog http(s) resources, so the `mcp://tool/<name>` form used
+        in the x402 MCP examples is invisible there. The endpoint plus a fragment is both real and per-tool unique.
+        """
+        return f"{self.settings.base_url}/mcp#{tool}"
+
     def resource_info(self, tool: str) -> Any:
         from x402.schemas import ResourceInfo
 
-        info = self.tool_info.get(tool, {})
-        desc = (info.get("description") or f"projectstate tool {tool}").split("\n")[0][:200]
+        desc = self.SUMMARIES.get(tool) or (self.tool_info.get(tool, {}).get("description") or f"projectstate tool {tool}").split("\n")[0][:200]
         return ResourceInfo(
-            url=f"mcp://tool/{tool}",
+            url=self.resource_url(tool),
             description=desc,
             mime_type="text/plain",
             service_name=self.SERVICE_NAME,
@@ -242,7 +259,7 @@ class X402Rail:
                 ext = declare_mcp_discovery_extension(
                     DeclareMcpDiscoveryConfig(
                         tool_name=tool,
-                        description=(info.get("description") or "").split("\n")[0][:300] or None,
+                        description=self.SUMMARIES.get(tool) or (info.get("description") or "").split("\n")[0][:300] or None,
                         transport="streamable-http",
                         input_schema=info.get("input_schema") or {"type": "object"},
                         example=self.EXAMPLES.get(tool),
