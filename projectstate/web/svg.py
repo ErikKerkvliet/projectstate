@@ -50,6 +50,8 @@ def lines(series: list[tuple[str, list[float], str]], labels: list[str], width: 
 
 
 def hbars(items: list[tuple[str, float]], width: int = 420, color: str = "#2563eb", fmt=lambda v: f"{v:g}") -> str:
+    # long labels (e.g. scanner-invented tool names) would push the bars out of the card
+    items = [((label if len(label) <= 22 else label[:21] + "…"), v) for label, v in items]
     vmax = max((v for _, v in items), default=1.0) or 1.0
     rh = 18
     height = rh * len(items) + 4

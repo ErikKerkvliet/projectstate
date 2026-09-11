@@ -9,7 +9,10 @@ header .brand{font-weight:700;text-decoration:none;color:var(--fg)}header nav a{
 main{max-width:1080px;margin:0 auto;padding:18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin:0 0 16px}
 h1{font-size:22px;margin:0 0 12px}h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:12px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600}
+.card{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+.trunc{display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+th,td{white-space:nowrap}td .muted{white-space:normal}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 input[type=text],input[type=email],input[type=password],input[type=number],select{padding:7px 9px;border:1px solid #d1d5db;border-radius:6px;font:inherit;width:100%;max-width:360px}
 button,.btn{padding:7px 12px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:6px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block}
