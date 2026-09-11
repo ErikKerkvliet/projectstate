@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% block title %}Docs — projectstate{% endblock %}{% block body %}
+<div class="card"><h1>Connecting an agent</h1>
+<p>Endpoint <code>{{ base_url }}/mcp</code> (Streamable HTTP; <code>{{ base_url }}/x402/mcp</code> is the same server). No account and no API key: the wallet that pays is the identity, and each wallet gets its own isolated projects.</p>
+<h3>The payment handshake</h3>
+<ol>
+<li>Call any tool. Without credit the result is <code>isError: true</code> with an x402 v2 <code>PaymentRequired</code> object in <code>structuredContent</code> (and the same JSON as text in <code>content[0].text</code>): scheme <code>exact</code>, network <code>{{ x402.network }}</code>, USDC, and the amount.</li>
+<li>Sign the payment with your wallet and retry the <em>same</em> call with the payload in <code>_meta["x402/payment"]</code>.</li>
+<li>The result carries the settlement receipt in <code>_meta["x402/payment-response"]</code> and a credit token in <code>_meta["projectstate/x402-credit"]</code>.</li>
+<li>Later calls draw from the credit: on a session-based connection automatically, otherwise by sending the credit token as <code>Authorization: Bearer xc_…</code> or in <code>_meta["projectstate/x402-credit"]</code>. When the credit runs out the next call answers with <code>PaymentRequired</code> again.</li>
+</ol>
+<p>Amounts: <b>${{ pack }}</b> per payment on a session-based connection, <b>${{ minpay }}</b> minimum per call without one. Unused credit stays on your wallet address.</p>
+{% if not x402.enabled %}<p class="warn">Payments are currently disabled on this server, so no call can be paid for.</p>{% endif %}
+</div>
+<div class="card"><h2>Clients</h2>
+<h3>TypeScript (Vercel AI SDK)</h3><pre>import { experimental_createMCPClient as createMCPClient } from "ai";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { withPayment } from "x402-mcp";
+
+const client = await createMCPClient({
+  transport: new StreamableHTTPClientTransport(new URL("{{ base_url }}/mcp")),
+}).then((c) => withPayment(c, { account: process.env.PRIVATE_KEY }));</pre>
+<h3>Python (official MCP SDK + x402)</h3><pre>from eth_account import Account
+from mcp import Client
+from x402 import x402Client
+from x402.mechanisms.evm.exact import register_exact_evm_client
+from x402.mechanisms.evm.signers import EthAccountSigner
+from x402.schemas import PaymentRequired
+
+x = x402Client()
+register_exact_evm_client(x, EthAccountSigner(Account.from_key(KEY)))
+async with Client("{{ base_url }}/mcp") as mcp:
+    r = await mcp.call_tool("project_open", {"project": "my-app"})
+    pr = r.structured_content                      # PaymentRequired
+    pay = (await x.create_payment_payload(PaymentRequired(**pr))).model_dump(by_alias=True, exclude_none=True)
+    r = await mcp.call_tool("project_open", {"project": "my-app"}, meta={"x402/payment": pay})
+    token = r.meta["projectstate/x402-credit"]     # reuse on the next calls
+    r = await mcp.call_tool("recall", {"project": "my-app", "query": "auth"},
+                            meta={"projectstate/x402-credit": token})</pre>
+<p class="muted">A worked example ships with the server as <code>scripts/x402_agent_demo.py</code>.</p>
+<p>Clients that cannot pay (Claude.ai connectors, Cursor, VS Code today) can reach the endpoint but every call answers with <code>PaymentRequired</code>.</p>
+</div>
+<div class="card"><h2>Tools &amp; prices</h2><table><tr><th>Tool</th><th>Parameters</th><th class="num">Price</th></tr>
+<tr><td><code>project_open</code></td><td>project (slug), name?, description? — omit project to list your projects</td><td class="num">${{ prices.project_open }}</td></tr>
+<tr><td><code>project_status</code></td><td>project, set_status?</td><td class="num">${{ prices.project_status }}</td></tr>
+<tr><td><code>remember</code></td><td>project, kind (decision|attempt|task|note), title, body?, tags?, files?, status?, supersedes?, idempotency_key?</td><td class="num">${{ prices.remember }}</td></tr>
+<tr><td><code>recall</code></td><td>project, query?, kind?, status?, tags?, files?, limit=5, max_chars=1500</td><td class="num">${{ prices.recall }}</td></tr>
+<tr><td><code>update</code></td><td>project, id, status?, title?, body?, append?, tags?, files?, delete?</td><td class="num">${{ prices.update }}</td></tr></table>
+<p class="muted">Prices are published per tool in <code>tools/list</code> under <code>_meta.priceUsd</code>. Every successful result carries <code>_meta["projectstate/chargedUsd"]</code> and <code>_meta["projectstate/balanceUsd"]</code>. Errors are never billed. Identical calls within 2 minutes (or any call with the same <code>idempotency_key</code>) return the cached result for free. Default caps per wallet: 2000 calls and $5 per day, 60 calls per minute.</p></div>
+{% endblock %}

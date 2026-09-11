@@ -1,0 +1,13 @@
+.env
+.env.bak-*
+data/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+*.db-wal
+*.db-shm
+# private operational docs (contain credentials / internal notes) — not part of the public repo
+REPORT.md
+WORKLOG.md
+marketing/

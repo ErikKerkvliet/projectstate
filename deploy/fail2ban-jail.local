@@ -1,0 +1,27 @@
+[DEFAULT]
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+backend  = systemd
+
+[sshd]
+enabled = true
+port    = 22
+mode    = aggressive
+
+[nginx-limit-req]
+enabled  = true
+port     = http,https
+logpath  = /var/log/nginx/projectstate.error.log
+maxretry = 20
+findtime = 10m
+bantime  = 30m
+
+[projectstate-login]
+enabled  = true
+port     = http,https
+filter   = projectstate-login
+logpath  = /var/log/nginx/projectstate.access.log
+maxretry = 10
+findtime = 15m
+bantime  = 1h

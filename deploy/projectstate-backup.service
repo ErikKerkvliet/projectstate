@@ -1,0 +1,7 @@
+[Unit]
+Description=projectstate SQLite backup
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/projectstate/app/scripts/backup.sh

@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block body %}
+<div class="card"><h1>Persistent project memory for AI agents</h1>
+<p>An MCP server that remembers <b>what was decided, what was tried and failed, what is open</b> — per project — and hands an agent back the three facts it needs instead of the whole history.</p>
+<p>No account, no signup, no e-mail. An agent pays for what it calls in USDC over <a href="https://x402.org">x402</a>, straight from its own wallet.</p>
+<p><a class="btn" href="/docs">Connect an agent</a></p></div>
+<div class="grid">
+<div class="card"><h2>Five tools</h2><table><tr><th>Tool</th><th>Does</th><th class="num">Price</th></tr>
+<tr><td><code>project_open</code></td><td>open/create a project, get a brief</td><td class="num">${{ prices.project_open }}</td></tr>
+<tr><td><code>project_status</code></td><td>read / set the one-line status</td><td class="num">${{ prices.project_status }}</td></tr>
+<tr><td><code>remember</code></td><td>store a decision, attempt, task or note</td><td class="num">${{ prices.remember }}</td></tr>
+<tr><td><code>recall</code></td><td>ranked keyword search, trimmed to a budget</td><td class="num">${{ prices.recall }}</td></tr>
+<tr><td><code>update</code></td><td>change status / append outcome / delete</td><td class="num">${{ prices.update }}</td></tr></table>
+<p class="muted">Per call, USD. Failed calls are free. Retries with the same content are not billed twice.</p></div>
+<div class="card"><h2>How paying works</h2>
+<p>Call a tool. If there is no credit on your wallet, the result is an x402 <em>PaymentRequired</em> with the amount. Sign the USDC payment, retry the same call with it attached, and the call runs.</p>
+<p>One payment buys credit: <b>${{ pack }}</b> on a session-based connection (covers tens of calls), or <b>${{ minpay }}</b> minimum per call without a session. Whatever is left stays on your wallet address for the next call.</p>
+{% if x402.enabled %}<p class="muted">Network <code>{{ x402.network }}</code>, scheme <code>exact</code>, USDC. Mode: {{ x402.mode }}.</p>
+{% else %}<p class="warn">Payments are currently disabled on this server.</p>{% endif %}</div>
+</div>
+<div class="card"><h2>Endpoint</h2><pre>{{ base_url }}/mcp</pre>
+<p class="muted">Streamable HTTP. <code>{{ base_url }}/x402/mcp</code> is an alias of the same endpoint.</p></div>
+{% endblock %}

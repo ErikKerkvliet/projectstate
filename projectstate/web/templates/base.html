@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}projectstate{% endblock %}</title>
+<style>
+:root{--fg:#111827;--muted:#6b7280;--bg:#f9fafb;--card:#fff;--line:#e5e7eb;--acc:#2563eb;--ok:#16a34a;--err:#dc2626}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--fg);background:var(--bg)}
+a{color:var(--acc)}header{background:#fff;border-bottom:1px solid var(--line)}header .in{max-width:1080px;margin:0 auto;padding:10px 18px;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+header .brand{font-weight:700;text-decoration:none;color:var(--fg)}header nav a{margin-right:12px;text-decoration:none}header form{display:inline}
+main{max-width:1080px;margin:0 auto;padding:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin:0 0 16px}
+h1{font-size:22px;margin:0 0 12px}h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:12px 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+table{border-collapse:collapse;width:100%;font-size:13.5px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+input[type=text],input[type=email],input[type=password],input[type=number],select{padding:7px 9px;border:1px solid #d1d5db;border-radius:6px;font:inherit;width:100%;max-width:360px}
+button,.btn{padding:7px 12px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:6px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block}
+button.sec,.btn.sec{background:#fff;color:var(--fg);border-color:#d1d5db}button.danger{background:var(--err);border-color:var(--err)}button.small{padding:3px 8px;font-size:12px}
+label{display:block;margin:8px 0 2px;font-size:13px;color:var(--muted)}
+.flash{padding:10px 14px;border-radius:6px;margin-bottom:14px}.flash.ok{background:#ecfdf5;color:#065f46}.flash.err{background:#fef2f2;color:#991b1b}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px}.tile b{display:block;font-size:20px}.tile span{color:var(--muted);font-size:12px}
+code,pre{font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}pre{background:#f3f4f6;padding:10px;border-radius:6px;overflow:auto}code{background:#f3f4f6;padding:1px 4px;border-radius:3px}
+.muted{color:var(--muted)}.warn{color:#b45309}.bad{color:var(--err)}.good{color:var(--ok)}.tag{display:inline-block;padding:0 6px;border-radius:9px;background:#eef2ff;color:#3730a3;font-size:12px}
+.key{font:13px ui-monospace,monospace;background:#fefce8;border:1px solid #fde68a;padding:8px;border-radius:6px;word-break:break-all}
+</style></head><body>
+<header><div class="in"><a class="brand" href="/">projectstate</a>
+<nav><a href="/docs">Docs</a>{% if is_admin %}<a href="/admin">Admin</a>{% endif %}</nav>
+<span style="flex:1"></span>
+</div></header>
+<main>{% if flash %}<div class="flash {{ flash[0] }}">{{ flash[1] }}</div>{% endif %}{% block body %}{% endblock %}</main>
+</body></html>

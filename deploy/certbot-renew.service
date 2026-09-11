@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew the Let's Encrypt IP-address certificate (6-day lifetime)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/certbot/bin/certbot renew --quiet
