@@ -28,9 +28,14 @@ def bars(values: list[float], labels: list[str], width: int = 720, height: int =
 def lines(series: list[tuple[str, list[float], str]], labels: list[str], width: int = 720, height: int = 180, fmt=lambda v: f"{v:g}") -> str:
     n = max(len(labels), 1)
     vmax = max((max(s[1]) for s in series if s[1]), default=1.0) or 1.0
-    pad_l, pad_b, pad_t = 40, 22, 10
+    pad_l, pad_b = 40, 22
+    pad_t = 30  # leaves room for the legend, so a series sitting at vmax cannot run through it
     sx = (width - pad_l - 6) / max(n - 1, 1)
     parts = [f'<svg viewBox="0 0 {width} {height}" width="100%" height="{height}" role="img" font-family="system-ui" font-size="10">']
+    lx = pad_l
+    for name, _, color in series:
+        parts.append(f'<rect x="{lx}" y="4" width="10" height="10" fill="{color}" rx="2"/><text x="{lx + 14}" y="13" fill="#374151">{escape(name)}</text>')
+        lx += 20 + int(6.2 * len(name))
     for frac in (0.5, 1.0):
         y = pad_t + (height - pad_t - pad_b) * (1 - frac)
         parts.append(f'<line x1="{pad_l}" x2="{width}" y1="{y:.1f}" y2="{y:.1f}" stroke="#e5e7eb"/>')
@@ -41,10 +46,6 @@ def lines(series: list[tuple[str, list[float], str]], labels: list[str], width: 
     for i, lab in enumerate(labels):
         if n <= 14 or i % max(1, n // 10) == 0:
             parts.append(f'<text x="{pad_l + i * sx:.1f}" y="{height - 6}" text-anchor="middle" fill="#6b7280">{escape(lab[-5:])}</text>')
-    lx = pad_l
-    for name, _, color in series:
-        parts.append(f'<rect x="{lx}" y="2" width="10" height="10" fill="{color}"/><text x="{lx + 13}" y="11" fill="#374151">{escape(name)}</text>')
-        lx += 14 + 7 * len(name)
     parts.append("</svg>")
     return "".join(parts)
 
