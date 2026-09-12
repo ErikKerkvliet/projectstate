@@ -44,6 +44,8 @@ async with Client("{{ base_url }}/mcp") as mcp:
 <tr><td><code>project_status</code></td><td>project, set_status?</td><td class="num">${{ prices.project_status }}</td></tr>
 <tr><td><code>remember</code></td><td>project, kind (decision|attempt|task|note), title, body?, tags?, files?, status?, supersedes?, idempotency_key?</td><td class="num">${{ prices.remember }}</td></tr>
 <tr><td><code>recall</code></td><td>project, query?, kind?, status?, tags?, files?, limit=5, max_chars=1500</td><td class="num">${{ prices.recall }}</td></tr>
+<tr><td><code>plan_check</code></td><td>project, intent (one line: what you are about to do), files?, limit=3, max_chars=1200</td><td class="num">${{ prices.plan_check }}</td></tr>
 <tr><td><code>update</code></td><td>project, id, status?, title?, body?, append?, tags?, files?, delete?</td><td class="num">${{ prices.update }}</td></tr></table>
+<p><b>plan_check</b> is the one to call before you start something. You say what you intend to do in one line; it runs three targeted searches and returns only what would change your mind: attempts that already failed at this, decisions still in force that constrain it, and open tasks that overlap. Cheaper than repeating work that failed once.</p>
 <p class="muted">Prices are published per tool in <code>tools/list</code> under <code>_meta.priceUsd</code>. Every successful result carries <code>_meta["projectstate/chargedUsd"]</code> and <code>_meta["projectstate/balanceUsd"]</code>. Errors are never billed. Identical calls within 2 minutes (or any call with the same <code>idempotency_key</code>) return the cached result for free. Default caps per wallet: 2000 calls and $5 per day, 60 calls per minute.</p></div>
 {% endblock %}

@@ -12,10 +12,12 @@ from .tenancy import require_caller
 INSTRUCTIONS = """projectstate keeps per-project memory for coding agents: decisions, attempts (what was tried and
 whether it worked), open tasks and notes, scoped to a project slug. Typical session:
 1. project_open(project) at the start -> a short brief of status, open tasks, latest decisions and failures.
-2. recall(project, query) before making a choice or repeating work -> the few most relevant entries, never the whole history.
-3. remember(project, kind, title, body) whenever you decide something, try something, or finish/plan a task.
-4. update(project, id, status=...) to close tasks, mark attempts, or supersede decisions.
-5. project_status(project, set_status=...) to leave a one-line handoff note for the next session.
+2. plan_check(project, intent) before starting anything non-trivial -> the failed attempts, binding decisions
+   and overlapping tasks that would change your plan. One call instead of guessing.
+3. recall(project, query) to look something up -> the few most relevant entries, never the whole history.
+4. remember(project, kind, title, body) whenever you decide something, try something, or finish/plan a task.
+5. update(project, id, status=...) to close tasks, mark attempts, or supersede decisions.
+6. project_status(project, set_status=...) to leave a one-line handoff note for the next session.
 Every call is metered (prices are listed per tool in tools/list _meta.priceUsd). Writes are idempotent."""
 
 
@@ -104,6 +106,27 @@ def register_tools(mcp: MCPServer, store: Store) -> None:
             raise _err(exc)
         return r["text"]
 
+    @mcp.tool(name="plan_check", title="Plan check")
+    async def plan_check(
+        project: str,
+        intent: str,
+        files: list[str] | None = None,
+        limit: int = 3,
+        max_chars: int = 1200,
+    ) -> str:
+        """Before you start something non-trivial, say what you are about to do and get back only what would
+        change your mind: attempts that already failed at this, decisions that are still in force and constrain
+        it, and open tasks that overlap. `intent` is one line in plain words, e.g. 'switch the cache to Redis'
+        or 'rewrite the auth middleware to use refresh tokens'. Pass `files` if you know which paths you will
+        touch; entries about those files are included even when the wording differs. Cheaper than repeating
+        work that already failed once."""
+        caller = require_caller()
+        try:
+            r = store.plan_check(caller.tenant_id, project, intent, files, limit, max_chars)
+        except StoreError as exc:
+            raise _err(exc)
+        return r["text"]
+
     @mcp.tool(name="update", title="Update entry")
     async def update(
         project: str,
@@ -129,4 +152,4 @@ def register_tools(mcp: MCPServer, store: Store) -> None:
         return f"Updated #{e['id']} {e['kind']}/{e['status']}: {e['title']}"
 
 
-TOOL_NAMES = ("project_open", "project_status", "remember", "recall", "update")
+TOOL_NAMES = ("project_open", "project_status", "remember", "recall", "plan_check", "update")

@@ -238,6 +238,7 @@ class X402Rail:
         "project_status": {"project": "my-app"},
         "remember": {"project": "my-app", "kind": "decision", "title": "Use SQLite FTS5 for recall", "body": "no vectors in v1"},
         "recall": {"project": "my-app", "query": "auth token expiry"},
+        "plan_check": {"project": "my-app", "intent": "switch the cache to Redis", "files": ["src/cache.py"]},
         "update": {"project": "my-app", "id": 42, "status": "done"},
     }
 
@@ -248,6 +249,7 @@ class X402Rail:
         "project_status": "Read or set a project's one-line status, with its open tasks and last change.",
         "remember": "Store one project fact: a decision, an attempt (worked/failed), a task or a note.",
         "recall": "Ranked keyword search over a project's memory, trimmed to a character budget.",
+        "plan_check": "Say what you are about to do and get back the failed attempts, binding decisions and overlapping tasks that would change the plan.",
         "update": "Change an entry: set its status, append an outcome, edit it or delete it.",
     }
 

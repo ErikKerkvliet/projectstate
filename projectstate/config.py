@@ -38,6 +38,7 @@ class Settings:
             "project_status": _env("PRICE_PROJECT_STATUS", "0.002"),
             "remember": _env("PRICE_REMEMBER", "0.002"),
             "recall": _env("PRICE_RECALL", "0.005"),
+            "plan_check": _env("PRICE_PLAN_CHECK", "0.010"),
             "update": _env("PRICE_UPDATE", "0.002"),
         }
     )

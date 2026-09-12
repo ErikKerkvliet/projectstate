@@ -10,7 +10,7 @@ async def test_all_tools_and_error_messages(server, h):
     tid, key = h.wallet()
     async with h.client(key) as c:
         tools = await c.list_tools()
-        assert sorted(t.name for t in tools.tools) == ["project_open", "project_status", "recall", "remember", "update"]
+        assert sorted(t.name for t in tools.tools) == ["plan_check", "project_open", "project_status", "recall", "remember", "update"]
         meta = {t.name: t.meta for t in tools.tools}
         assert meta["recall"]["priceUsd"] == "0.005" and meta["recall"]["x402"]["packUsd"] == "0.1"
         r = await c.call_tool("recall", {"project": "ghost", "query": "x"})
@@ -184,3 +184,24 @@ def test_admin_dashboard(server, h):
     assert adm.post(f"/admin/users/{tid}", data={"csrf": csrf, "action": "revoke_tokens"}).status_code == 303
     assert h.svc.db.val("SELECT COUNT(*) FROM x402_credit_tokens WHERE tenant_id=?", (tid,)) == 0
     assert h.svc.meter.ledger_matches_wallet(tid)
+
+
+async def test_plan_check_over_the_wire(server, h):
+    tid, key = h.wallet()
+    async with h.client(key) as c:
+        tools = await c.list_tools()
+        assert "plan_check" in [t.name for t in tools.tools]
+        assert {t.name: t.meta["priceUsd"] for t in tools.tools}["plan_check"] == "0.01"
+        await c.call_tool("project_open", {"project": "pc"})
+        await c.call_tool("remember", {"project": "pc", "kind": "attempt", "title": "Tried Redis for caching",
+                                       "body": "pool exhausted", "status": "failed", "files": ["src/cache.py"]})
+        await c.call_tool("remember", {"project": "pc", "kind": "decision", "title": "Use Memcached, not Redis", "status": "active"})
+        r = await c.call_tool("plan_check", {"project": "pc", "intent": "switch the cache to Redis"})
+        assert not r.is_error
+        assert "Prior failures" in text(r) and "Tried Redis for caching" in text(r)
+        assert "Use Memcached" in text(r)
+        assert r.meta["projectstate/chargedUsd"] == "0.01"
+        r = await c.call_tool("plan_check", {"project": "pc", "intent": "add a metrics endpoint"})
+        assert not r.is_error and "Nothing on record" in text(r)
+        r = await c.call_tool("plan_check", {"project": "pc", "intent": ""})
+        assert r.is_error and "'intent' is required" in text(r)

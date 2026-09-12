@@ -16,9 +16,29 @@ Every agent already has "memory". What it does not have is **project state that 
 | `project_status(project, set_status?)` | read or set the one-line status (hand-off note between sessions) | $0.002 |
 | `remember(project, kind, title, body?, tags?, files?, status?, supersedes?, idempotency_key?)` | store a `decision`, `attempt`, `task` or `note` | $0.002 |
 | `recall(project, query?, kind?, status?, tags?, files?, limit=5, max_chars=1500)` | ranked keyword search, trimmed to a budget | $0.005 |
+| `plan_check(project, intent, files?, limit=3, max_chars=1200)` | say what you are about to do; get back the failed attempts, binding decisions and overlapping tasks that would change the plan | $0.010 |
 | `update(project, id, status?, title?, body?, append?, tags?, files?, delete?)` | close tasks, mark attempts, supersede decisions | $0.002 |
 
 Failed calls are free. Identical retries (or any call with the same `idempotency_key`) are never billed twice. Prices are published per tool in `tools/list` under `_meta.priceUsd`.
+
+### plan_check
+
+The tool to call before starting something non-trivial:
+
+```
+plan_check(project="my-app", intent="switch the session cache to Redis", files=["src/cache.py"])
+
+Plan check for 'my-app': 'switch the session cache to Redis'
+Prior failures (1):
+  #8 attempt/failed (2026-09-12): Tried Redis for the session cache — connection pool exhausted under load
+Active decisions that constrain this (1):
+  #9 decision/active (2026-09-12): Cache with SQLite instead of Redis — one less service to run
+Open tasks that overlap (1):
+  #10 task/open (2026-09-12): Benchmark the cache options
+```
+
+Three targeted searches in one call, returning only what would change the plan. A clean plan answers
+"Nothing on record matches this plan" so the agent can proceed without a second lookup.
 
 ## How paying works
 

@@ -426,6 +426,91 @@ class Store:
             txt = txt[: max_chars - 1] + "…"
         return txt, len(txt)
 
+    # -- plan check ---------------------------------------------------------------------------
+    def plan_check(self, tenant_id: str, slug: str, intent: str, files: Any = None, limit: int = 3, max_chars: int = 1200, log: bool = True) -> dict[str, Any]:
+        """Answer "I am about to do X — is there anything on record?" for one project.
+
+        Runs three targeted searches instead of one: attempts that already failed, decisions that are still
+        active, and open tasks. Returns them grouped, newest and best-matching first, inside a character budget.
+        """
+        p = self.require_project(tenant_id, slug)
+        intent = " ".join((intent or "").split())
+        if not intent:
+            raise StoreError("Parameter 'intent' is required: one line saying what you are about to do, e.g. 'switch the cache to Redis'.")
+        limit = max(1, min(int(limit or 3), 10))
+        max_chars = max(300, min(int(max_chars or 1200), 6000))
+        file_list = _norm_files(files)
+
+        sections: list[tuple[str, list[dict[str, Any]]]] = []
+        seen: set[int] = set()
+        total_candidates = 0
+        for label, kind, status in (
+            ("Prior failures", "attempt", "failed"),
+            ("Active decisions that constrain this", "decision", "active"),
+            ("Open tasks that overlap", "task", "open"),
+        ):
+            # no files filter here: paths must widen the net, never hide an entry that carries no path
+            r = self.recall(tenant_id, p.slug, intent, kind=kind, status=status, limit=limit, max_chars=max_chars, log=False)
+            total_candidates += r["n_candidates"]
+            picked = [e for e in r["entries"] if e["id"] not in seen]
+            for e in picked:
+                seen.add(e["id"])
+            if picked:
+                sections.append((label, picked))
+
+        # entries touching the same files are relevant even when the words do not match
+        if file_list:
+            r = self.recall(tenant_id, p.slug, "", files=file_list, limit=limit, max_chars=max_chars, log=False)
+            extra = [e for e in r["entries"] if e["id"] not in seen and e["status"] not in ("superseded", "dropped", "archived")]
+            for e in extra:
+                seen.add(e["id"])
+            if extra:
+                sections.append(("Other entries touching those files", extra))
+
+        text = self._format_plan_check(p, intent, sections, max_chars)
+        if log:
+            self.db.exec(
+                "INSERT INTO search_log(ts,tenant_id,project_id,query,filters,mode,n_candidates,n_returned,top_score,chars_returned)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (now_iso(), tenant_id, p.id, intent, dumps({"plan_check": True, "files": file_list}), "plan_check",
+                 total_candidates, len(seen), None, len(text)),
+            )
+        return {"sections": sections, "n_found": len(seen), "text": text}
+
+    def _format_plan_check(self, p: Project, intent: str, sections: list[tuple[str, list[dict[str, Any]]]], max_chars: int) -> str:
+        head = f"Plan check for '{p.slug}': {intent!r}"
+        if not sections:
+            return (head + "\nNothing on record matches this plan: no failed attempt, no active decision and no open task. "
+                    "Go ahead, and remember(project, kind='attempt', ...) how it turns out.")
+        trailer = "Act on these with update(project, id, ...); record the outcome with remember(...)."
+        budget = max(len(head) + 1, max_chars - len(trailer) - 1)  # keep room for the trailer
+        lines = [head]
+        used = len(head)
+        truncated = False
+        for label, entries in sections:
+            header = f"{label} ({len(entries)}):"
+            if used + len(header) + 1 > budget:
+                truncated = True
+                break
+            lines.append(header)
+            used += len(header) + 1
+            for e in entries:
+                line = "  " + self.format_entry_line(e, snippet=False, body_chars=130)
+                if used + len(line) + 1 > budget:
+                    truncated = True
+                    break
+                lines.append(line)
+                used += len(line) + 1
+            if truncated:
+                break
+        if truncated:
+            note = "… more not shown (raise max_chars)"
+            if used + len(note) + 1 <= budget:
+                lines.append(note)
+        lines.append(trailer)
+        txt = "\n".join(lines)
+        return txt if len(txt) <= max_chars else txt[: max_chars - 1] + "…"
+
     # -- briefs -------------------------------------------------------------------------------
     def brief(self, tenant_id: str, slug: str, max_chars: int = 1800) -> str:
         p = self.require_project(tenant_id, slug)

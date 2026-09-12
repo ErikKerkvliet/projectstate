@@ -15,7 +15,7 @@ from typing import Any
 from .config import Settings, usd_to_micro
 from .db import Database, dumps, now_iso, today_iso
 
-TOOLS = ("project_open", "project_status", "remember", "recall", "update")
+TOOLS = ("project_open", "project_status", "remember", "recall", "plan_check", "update")
 
 
 def micro_to_usd(m: int) -> str:
