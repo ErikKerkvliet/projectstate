@@ -4,7 +4,7 @@
   "title": "projectstate",
   "description": "Per-project memory for AI agents: decisions, attempts, tasks, ranked recall. Paid per call via x402.",
   "websiteUrl": "https://projectstate.online",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "remotes": [
     {
       "type": "streamable-http",
